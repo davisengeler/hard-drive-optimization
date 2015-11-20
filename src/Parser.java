@@ -7,22 +7,16 @@ import com.davisengeler.HardDrive;
 
 public class Parser {
 
+    // Set up some initial stuff
+    static int numTracks = 10;
+    static int numSectorsPerTrack = 10;
     static int currentTrack = 0;
     static int currentSector = 0;
     static int armStatus = 0;
+    static HardDrive hdd = new HardDrive(numTracks, numSectorsPerTrack);
 
-    public static void main(String[] args) {
-
-        // Set up some initial stuff
-        int numTracks = 10;
-        int numSectorsPerTrack = 10;
-        HardDrive hdd = new HardDrive(numTracks, numSectorsPerTrack);
-
-        // Some organization techniques to attempt optimizations
-        HashMap<String, ArrayList<String>> readWrite = new HashMap<String, ArrayList<String>>();
-        HashMap<Integer, ArrayList<Integer>> systemRead = new HashMap<Integer, ArrayList<Integer>>();
-        HashMap<Integer, Integer> systemWrite = new HashMap<Integer, Integer>();
-
+    public static void main(String[] args)
+    {
         // Scan in the requests
         ArrayList<ArrayList<String>> commandBlasts = new ArrayList<ArrayList<String>>();
         Scanner scan;
@@ -41,38 +35,45 @@ public class Parser {
             System.out.println(e.getMessage());
         }
 
-        // Section the micro code sections by "blasts."
-        ArrayList<ArrayList<String>> microCodeBlasts = new ArrayList<ArrayList<String>>();
-        for ( ArrayList<String> commands : commandBlasts) {
+        // Divide the micro code into sections for each 'blast.'
+        ArrayList<ArrayList<Command>> microCodeBlasts = new ArrayList<ArrayList<Command>>();
+        for ( ArrayList<String> commandStrings : commandBlasts)
+        {
+            // For each group of commands in each 'command blast.'
             // Make a new micro code blast.
             System.out.println("Command Blast:");
-            ArrayList<String> microCode = new ArrayList<String>();
+            ArrayList<Command> microCode = new ArrayList<Command>();
             microCodeBlasts.add(microCode);
-            for (String command : commands) {
-                String split[] = command.split(" ");
-                command = split[0].toLowerCase();
+
+            // Some organization techniques to attempt optimizations
+            HashMap<String, ArrayList<Command>> readWrite = new HashMap<String, ArrayList<Command>>();
+
+            for (String commandString : commandStrings)
+            {
+                // For each individual commands inside a command blast.
+                // This section converts individual commands into their unoptimized microcode.
+                String split[] = commandString.split(" ");
+                commandString = split[0].toLowerCase();
+
                 // Can't use a switch for Strings?
                 // Determine what should be done for each one.
                 // TODO: This is currently unoptimized microcode.
-                if (command.equals("seek")) {
+                if (commandString.equals("seek")) {
                     // For SEEK
                     int parameter = Integer.parseInt(split[1]);
-                    int desiredTrack = parameter / 10;
-                    int desiredSector = parameter % 10;
+                    int desiredTrack = parameter / numTracks;
+                    int desiredSector = parameter % numSectorsPerTrack;
                     System.out.println("Seek to track " + desiredTrack + ", sector " + desiredSector + ".");
 
                     // Set the correct ARM status
                     if (currentTrack < desiredTrack) {
-                        microCode.add("arm 1");
+                        microCode.add(new Command(CommandType.arm, 1));
                         System.out.println("arm 1");
                         armStatus = 1;
                     } else if (currentTrack > desiredTrack) {
-                        microCode.add("arm -1");
+                        microCode.add(new Command(CommandType.arm, -1));
                         System.out.println("arm -1");
                         armStatus = -1;
-                    } else {
-                        System.out.println("arm 0");
-                        armStatus = 0;
                     }
 
                     // Add correct number of idles
@@ -80,6 +81,7 @@ public class Parser {
                     while (seeking) {
                         if (currentTrack == desiredTrack && armStatus != 0) {
                             System.out.println("arm 0");
+                            microCode.add(new Command(CommandType.arm, 0));
                             armStatus = 0;
                         }
                         if (currentTrack == desiredTrack && currentSector == desiredSector){
@@ -87,57 +89,99 @@ public class Parser {
                             System.out.println("Currently over track " + currentTrack + ", sector " + currentSector + ".");
                         }
                         else {
-                            microCode.add("idle");
+                            microCode.add(new Command(CommandType.idle));
                             System.out.println("idle");
                             spin();
                         }
                     }
-
                 }
-                else if (command.equals("read")) {
+                else if (commandString.equals("read")) {
                     // for READ
                     int readTimes = Integer.parseInt(split[1]);
                     for (int i = 0; i < readTimes; i++) {
                         System.out.println("read track " + currentTrack + ", sector " + currentSector + ".");
-                        microCode.add("read");
+                        microCode.add(new Command(CommandType.read));
 
                         // Store some information for optimization
-                        String key = "" + currentTrack + currentSector;
-                        if (!readWrite.containsKey(key))
-                            readWrite.put(key, new ArrayList<String>());
-                        readWrite.get(key).add("read");
+                        Command readCommand = new Command(CommandType.read);
+                        if (!readWrite.containsKey(readCommand.sectorID))
+                            readWrite.put(readCommand.sectorID, new ArrayList<Command>());
+                        readWrite.get(readCommand.sectorID).add(readCommand);
 
                         // Simulate a spin
                         spin();
                     }
                 }
-                else if (command.equals("write")) {
-                    for (int i = 1; i < split.length; i++) {
+                else if (commandString.equals("write")) {
+                    for (int i = 1; i < split.length; i++)
+                    {
+                        //
                         int value = Integer.parseInt(split[i]);
                         System.out.println("write value " + value + " to track " + currentTrack + ", sector " + currentSector);
-                        microCode.add("write " + value);
+                        microCode.add(new Command(CommandType.read));
 
                         // Store some information for optimization
-                        String key = "" + currentTrack + currentSector;
-                        if (!readWrite.containsKey(key))
-                            readWrite.put(key, new ArrayList<String>());
-                        readWrite.get(key).add("write " + value);
+                        Command writeCommand = new Command(CommandType.write, value);
+                        if (!readWrite.containsKey(writeCommand.sectorID))
+                            readWrite.put(writeCommand.sectorID, new ArrayList<Command>());
+                        readWrite.get(writeCommand.sectorID).add(writeCommand);
 
                         // Simulate a spin
                         spin();
                     }
                 }
-                else {
-                    System.out.println("PROBLEM: Undefined user command '" + command + "'");
-                }
+                else System.out.println("PROBLEM: Undefined user command '" + commandString + "'");
             }
             System.out.println("");
+
+            // At this point, 'microCode' holds all of the unoptimized commands for this blast.
+            // So let's replace the content of 'microCode' with its optimized version.
+            microCode = optimize(microCode, readWrite);
+
+            // Print out the optimized microcode.
+            for (Command currentCommand : microCode) {
+                System.out.println(currentCommand);
+            }
         }
+    }
+
+    private static ArrayList<Command> optimize(ArrayList<Command> unoptimized, HashMap<String, ArrayList<Command>> readWriteRelationships) {
+        ArrayList<Command> optimized = new ArrayList<Command>();
+        HashMap<Integer, ArrayList<Integer>> systemRead = new HashMap<Integer, ArrayList<Integer>>();
+        HashMap<Integer, Integer> systemWrite = new HashMap<Integer, Integer>();
+
+
+
+        return optimized;
+    }
+
+    // Command class to make things clean and readable.
+    private enum CommandType { idle, arm, read, write, push, pop, system }
+    private static class Command
+    {
+        CommandType type = CommandType.idle;    // Default to idle.
+        Integer param = null;                   // Use Integer wrapper so I can use null for non-param commands.
+        String sectorID = "00";                 // Default to track 0, sector 0.
+        public Command(CommandType type) {
+            // For non-param commands.
+            this.type = type;
+            this.sectorID = "" + currentTrack + currentSector;
+        }
+        public Command(CommandType type, Integer param) {
+            // For commands with param.
+            this.type = type;
+            this.param = param;
+            this.sectorID = "" + currentTrack + currentSector;
+        }
+        public void setSectorID (String newSectorID) {
+            this.sectorID = newSectorID;
+        }
+        public String toString() { return type.toString() + " " + ((param == null) ? param : ""); }
     }
 
     private static void spin() {
         // Simulate spin
-        currentSector = (currentSector + 1) % 10;
+        currentSector = (currentSector + 1) % numSectorsPerTrack;
         currentTrack = (currentTrack + armStatus);
         if (currentTrack > 10) currentTrack = 10;
         else if (currentTrack < 0) currentTrack = 0;
