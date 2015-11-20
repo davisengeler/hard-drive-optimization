@@ -183,7 +183,7 @@ public class Parser {
         // Simulate spin
         currentSector = (currentSector + 1) % numSectorsPerTrack;
         currentTrack = (currentTrack + armStatus);
-        if (currentTrack > 10) currentTrack = 10;
+        if (currentTrack > numTracks) currentTrack = numTracks;
         else if (currentTrack < 0) currentTrack = 0;
 //        System.out.println("Head is currently on track " + currentTrack + " over sector " + currentSector);
     }
