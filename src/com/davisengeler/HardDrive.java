@@ -14,32 +14,34 @@ public class HardDrive {
         trackSector = new int[numTracks][numSectorsPerTrack];
     }
 
-    public enum Command {
-        IDLE, ARM, READ, WRITE, PUSH, POP, SYSTEM
+    public enum CommandType {
+        idle, arm, read, write, push, pop, system
     }
 
-    public void command(Command command, int param) {
+    public void command(CommandType command, int param) {
+//        System.out.println("\tHDD Recieved command '" + command.toString() + "' with parameter '" + param + "'.");
         switch (command) {
-            case IDLE:
+            case idle:
                 // Does nothing
                 break;
-            case ARM:
+            case arm:
                 setArm(param);
                 break;
-            case READ:
+            case read:
                 // Temporarily printing READ
-                System.out.println(read());
+                System.out.println("Value '" + read() + "' read from track " + currentTrack + ", sector " + currentSector);
                 break;
-            case WRITE:
+            case write:
                 write(param);
+                System.out.println("Value '" + param + "' saved to track " + currentTrack + ", sector " + currentSector);
                 break;
-            case PUSH:
+            case push:
                 // Fuck this thing
                 break;
-            case POP:
+            case pop:
                 // Fuck that thing
                 break;
-            case SYSTEM:
+            case system:
                 system();
                 break;
             default:
@@ -56,12 +58,15 @@ public class HardDrive {
         switch (status) {
             case -1:
                 armStatus = Arm.IN;
+                System.out.println("\tThe arm is now moving in.");
                 break;
             case 1:
                 armStatus = Arm.OUT;
+                System.out.println("\tThe arm is now moving out.");
                 break;
             default:
                 armStatus = Arm.STILL;
+                System.out.println("\tThe arm has stopped moving.");
         }
     }
 
@@ -69,9 +74,10 @@ public class HardDrive {
         currentSector = (currentSector + 1) % numSectorsPerTrack;
         if (armStatus == Arm.OUT && currentTrack < (numTracks - 1)) {
             currentTrack++;
-        } else if (armStatus == Arm.IN && currentTrack > (numTracks - 1)) {
+        } else if (armStatus == Arm.IN && currentTrack > 0) {
             currentTrack--;
         }
+//        System.out.println("\t\tThe read head is now over track " + currentTrack + ", sector " + currentSector);
     }
 
     public int read() {

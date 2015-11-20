@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Scanner;
 import com.davisengeler.HardDrive;
+import com.davisengeler.HardDrive.CommandType;
 
 public class Parser {
 
@@ -59,47 +60,50 @@ public class Parser {
                 // Determine what should be done for each one.
                 // TODO: This is currently unoptimized microcode.
                 if (commandString.equals("seek")) {
-                    // For SEEK
+                    // SEEK
                     int parameter = Integer.parseInt(split[1]);
                     int desiredTrack = parameter / numTracks;
                     int desiredSector = parameter % numSectorsPerTrack;
-                    System.out.println("Seek to track " + desiredTrack + ", sector " + desiredSector + ".");
+//                    System.out.println("Seek to track " + desiredTrack + ", sector " + desiredSector + ".");
 
                     // Set the correct ARM status
                     if (currentTrack < desiredTrack) {
                         microCode.add(new Command(CommandType.arm, 1));
-                        System.out.println("arm 1");
+//                        System.out.println("arm 1");
                         armStatus = 1;
+                        spin();
                     } else if (currentTrack > desiredTrack) {
                         microCode.add(new Command(CommandType.arm, -1));
-                        System.out.println("arm -1");
+//                        System.out.println("arm -1");
                         armStatus = -1;
+                        spin();
                     }
 
                     // Add correct number of idles
                     boolean seeking = true;
                     while (seeking) {
                         if (currentTrack == desiredTrack && armStatus != 0) {
-                            System.out.println("arm 0");
+//                            System.out.println("arm 0");
                             microCode.add(new Command(CommandType.arm, 0));
                             armStatus = 0;
+                            spin();
                         }
                         if (currentTrack == desiredTrack && currentSector == desiredSector){
                             seeking = false;
-                            System.out.println("Currently over track " + currentTrack + ", sector " + currentSector + ".");
+//                            System.out.println("Currently over track " + currentTrack + ", sector " + currentSector + ".");
                         }
                         else {
                             microCode.add(new Command(CommandType.idle));
-                            System.out.println("idle");
+//                            System.out.println("idle");
                             spin();
                         }
                     }
                 }
                 else if (commandString.equals("read")) {
-                    // for READ
+                    // READ
                     int readTimes = Integer.parseInt(split[1]);
                     for (int i = 0; i < readTimes; i++) {
-                        System.out.println("read track " + currentTrack + ", sector " + currentSector + ".");
+//                        System.out.println("read track " + currentTrack + ", sector " + currentSector + ".");
                         microCode.add(new Command(CommandType.read));
 
                         // Store some information for optimization
@@ -113,12 +117,12 @@ public class Parser {
                     }
                 }
                 else if (commandString.equals("write")) {
+                    // WRITE
                     for (int i = 1; i < split.length; i++)
                     {
-                        //
                         int value = Integer.parseInt(split[i]);
-                        System.out.println("write value " + value + " to track " + currentTrack + ", sector " + currentSector);
-                        microCode.add(new Command(CommandType.read));
+//                        System.out.println("write value " + value + " to track " + currentTrack + ", sector " + currentSector);
+                        microCode.add(new Command(CommandType.write, value));
 
                         // Store some information for optimization
                         Command writeCommand = new Command(CommandType.write, value);
@@ -140,7 +144,7 @@ public class Parser {
 
             // Print out the optimized microcode.
             for (Command currentCommand : microCode) {
-                System.out.println(currentCommand);
+                hdd.command(currentCommand.type, currentCommand.param);
             }
         }
     }
@@ -151,32 +155,33 @@ public class Parser {
         HashMap<Integer, Integer> systemWrite = new HashMap<Integer, Integer>();
 
 
-
-        return optimized;
+        // TODO: This is just returning the unoptimized code for now.
+        return unoptimized;
     }
 
     // Command class to make things clean and readable.
-    private enum CommandType { idle, arm, read, write, push, pop, system }
     private static class Command
     {
-        CommandType type = CommandType.idle;    // Default to idle.
-        Integer param = null;                   // Use Integer wrapper so I can use null for non-param commands.
-        String sectorID = "00";                 // Default to track 0, sector 0.
+        CommandType type;
+        int param = 0;
+        String sectorID = "00";
         public Command(CommandType type) {
-            // For non-param commands.
+            // For non-param commands
             this.type = type;
             this.sectorID = "" + currentTrack + currentSector;
+//            System.out.println(type.toString() + "()");
         }
         public Command(CommandType type, Integer param) {
             // For commands with param.
             this.type = type;
             this.param = param;
             this.sectorID = "" + currentTrack + currentSector;
+//            System.out.println(type.toString() + "(" + param + ")");
         }
         public void setSectorID (String newSectorID) {
             this.sectorID = newSectorID;
         }
-        public String toString() { return type.toString() + " " + ((param == null) ? param : ""); }
+        public String toString() { return type.toString() + " " + param; }
     }
 
     private static void spin() {
