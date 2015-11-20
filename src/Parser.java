@@ -1,6 +1,7 @@
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Scanner;
 import com.davisengeler.HardDrive;
 
@@ -16,6 +17,11 @@ public class Parser {
         int numTracks = 10;
         int numSectorsPerTrack = 10;
         HardDrive hdd = new HardDrive(numTracks, numSectorsPerTrack);
+
+        // Some organization techniques to attempt optimizations
+        HashMap<String, ArrayList<String>> readWrite = new HashMap<String, ArrayList<String>>();
+        HashMap<Integer, ArrayList<Integer>> systemRead = new HashMap<Integer, ArrayList<Integer>>();
+        HashMap<Integer, Integer> systemWrite = new HashMap<Integer, Integer>();
 
         // Scan in the requests
         ArrayList<ArrayList<String>> commandBlasts = new ArrayList<ArrayList<String>>();
@@ -94,6 +100,14 @@ public class Parser {
                     for (int i = 0; i < readTimes; i++) {
                         System.out.println("read track " + currentTrack + ", sector " + currentSector + ".");
                         microCode.add("read");
+
+                        // Store some information for optimization
+                        String key = "" + currentTrack + currentSector;
+                        if (!readWrite.containsKey(key))
+                            readWrite.put(key, new ArrayList<String>());
+                        readWrite.get(key).add("read");
+
+                        // Simulate a spin
                         spin();
                     }
                 }
@@ -102,11 +116,19 @@ public class Parser {
                         int value = Integer.parseInt(split[i]);
                         System.out.println("write value " + value + " to track " + currentTrack + ", sector " + currentSector);
                         microCode.add("write " + value);
+
+                        // Store some information for optimization
+                        String key = "" + currentTrack + currentSector;
+                        if (!readWrite.containsKey(key))
+                            readWrite.put(key, new ArrayList<String>());
+                        readWrite.get(key).add("write " + value);
+
+                        // Simulate a spin
                         spin();
                     }
                 }
                 else {
-                    System.out.println(command);
+                    System.out.println("PROBLEM: Undefined user command '" + command + "'");
                 }
             }
             System.out.println("");
