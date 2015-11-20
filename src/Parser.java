@@ -48,8 +48,7 @@ public class Parser {
                 // Can't use a switch for Strings?
                 // Determine what should be done for each one.
                 // TODO: This is currently unoptimized microcode.
-                if (command.equals("seek")){
-
+                if (command.equals("seek")) {
                     // For SEEK
                     int parameter = Integer.parseInt(split[1]);
                     int desiredTrack = parameter / 10;
@@ -57,29 +56,58 @@ public class Parser {
                     System.out.println("Seek to track " + desiredTrack + ", sector " + desiredSector + ".");
 
                     // Set the correct ARM status
-                    if (currentTrack > desiredTrack) {
+                    if (currentTrack < desiredTrack) {
                         microCode.add("arm 1");
+                        System.out.println("arm 1");
                         armStatus = 1;
-                    } else if (currentTrack < desiredTrack) {
+                    } else if (currentTrack > desiredTrack) {
                         microCode.add("arm -1");
+                        System.out.println("arm -1");
                         armStatus = -1;
-                    } else armStatus = 0;
+                    } else {
+                        System.out.println("arm 0");
+                        armStatus = 0;
+                    }
 
                     // Add correct number of idles
                     boolean seeking = true;
                     while (seeking) {
-                        if (currentTrack == desiredTrack && currentSector == desiredSector)
+                        if (currentTrack == desiredTrack && armStatus != 0) {
+                            System.out.println("arm 0");
+                            armStatus = 0;
+                        }
+                        if (currentTrack == desiredTrack && currentSector == desiredSector){
                             seeking = false;
+                            System.out.println("Currently over track " + currentTrack + ", sector " + currentSector + ".");
+                        }
                         else {
                             microCode.add("idle");
+                            System.out.println("idle");
+                            spin();
                         }
                     }
 
-                } else {
+                }
+                else if (command.equals("read")) {
+                    // for READ
+                    int readTimes = Integer.parseInt(split[1]);
+                    for (int i = 0; i < readTimes; i++) {
+                        System.out.println("read track " + currentTrack + ", sector " + currentSector + ".");
+                        microCode.add("read");
+                        spin();
+                    }
+                }
+                else if (command.equals("write")) {
+                    for (int i = 1; i < split.length; i++) {
+                        int value = Integer.parseInt(split[i]);
+                        System.out.println("write value " + value + " to track " + currentTrack + ", sector " + currentSector);
+                        microCode.add("write " + value);
+                        spin();
+                    }
+                }
+                else {
                     System.out.println(command);
                 }
-
-//
             }
             System.out.println("");
         }
@@ -89,7 +117,8 @@ public class Parser {
         // Simulate spin
         currentSector = (currentSector + 1) % 10;
         currentTrack = (currentTrack + armStatus);
-        if (currentTrack > 10) currentSector = 10;
-        else if (currentTrack < 0) currentSector = 0;
+        if (currentTrack > 10) currentTrack = 10;
+        else if (currentTrack < 0) currentTrack = 0;
+//        System.out.println("Head is currently on track " + currentTrack + " over sector " + currentSector);
     }
 }
