@@ -83,4 +83,7 @@ public class HardDrive {
     public void write(int value) {
         trackSector[currentTrack][currentSector] = value;
     }
+
+    public int system() { return trackSector[currentTrack][currentSector]; } // Not totally sure if this does anything different than 'read' at this simulated hardware level.
+
 }
