@@ -1,11 +1,9 @@
-package com.davisengeler;
-
 import java.io.File;
 import java.io.FileNotFoundException;
-import java.util.ArrayList;
 import java.util.Scanner;
+import com.davisengeler.HardDrive;
 
-public class Main {
+public class Parser {
 
     public static void main(String[] args) {
 
@@ -15,7 +13,7 @@ public class Main {
         HardDrive hdd = new HardDrive(numTracks, numSectorsPerTrack);
 
         // Scan in the requests
-        Scanner scan = null;
+        Scanner scan;
         try {
             scan = new Scanner(new File("test.txt"));
             hdd.command(HardDrive.Command.ARM, 1);

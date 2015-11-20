@@ -1,14 +1,11 @@
 package com.davisengeler;
 
-/**
- * Created by Davis on 11/19/15.
- */
 public class HardDrive {
-    int numSectorsPerTrack = 0;
-    int numTracks = 0;
-    int trackSector[][];
-    int currentTrack = 0;
-    int currentSector = 0;
+    public int numSectorsPerTrack = 0;
+    public int numTracks = 0;
+    public int trackSector[][];
+    public int currentTrack = 0;
+    public int currentSector = 0;
     Arm armStatus = Arm.STILL;
 
     public HardDrive (int numTracks, int numSectorsPerTrack) {
