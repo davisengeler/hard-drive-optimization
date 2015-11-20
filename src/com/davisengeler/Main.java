@@ -18,8 +18,11 @@ public class Main {
         Scanner scan = null;
         try {
             scan = new Scanner(new File("test.txt"));
+            hdd.command(HardDrive.Command.ARM, 1);
             while (scan.hasNext()) {
-                System.out.println(scan.next());
+                scan.next();
+                hdd.command(HardDrive.Command.READ, 0);
+                System.out.println("Track: " + hdd.currentTrack + "\nSector: " + hdd.currentSector + "\n");
             }
         } catch (FileNotFoundException e) {
             System.out.println(e.getMessage());

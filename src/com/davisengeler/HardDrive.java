@@ -30,7 +30,8 @@ public class HardDrive {
                 setArm(param);
                 break;
             case READ:
-                read();
+                // Temporarily printing READ
+                System.out.println(read());
                 break;
             case WRITE:
                 write(param);
@@ -42,12 +43,12 @@ public class HardDrive {
                 // Fuck that thing
                 break;
             case SYSTEM:
-                // Fuck this thing in particular
+                system();
                 break;
             default:
                 System.out.println("INVALID COMMAND");
         }
-        spin();
+        spin(); // Simulates a unit of time passing for every command sent.
     }
 
     public enum Arm {
@@ -56,10 +57,10 @@ public class HardDrive {
 
     public void setArm(int status) {
         switch (status) {
-            case 1:
+            case -1:
                 armStatus = Arm.IN;
                 break;
-            case -1:
+            case 1:
                 armStatus = Arm.OUT;
                 break;
             default:
@@ -69,9 +70,9 @@ public class HardDrive {
 
     public void spin() {
         currentSector = (currentSector + 1) % numSectorsPerTrack;
-        if (armStatus == Arm.OUT && currentTrack < numTracks) {
+        if (armStatus == Arm.OUT && currentTrack < (numTracks - 1)) {
             currentTrack++;
-        } else if (armStatus == Arm.IN && currentTrack > numTracks) {
+        } else if (armStatus == Arm.IN && currentTrack > (numTracks - 1)) {
             currentTrack--;
         }
     }
