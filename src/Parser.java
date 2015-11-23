@@ -42,7 +42,7 @@ public class Parser {
         {
             // For each group of commands in each 'command blast.'
             // Make a new micro code blast.
-            System.out.println("Command Blast:");
+            System.out.println("\n====================\n");
             ArrayList<Command> microCode = new ArrayList<Command>();
             microCodeBlasts.add(microCode);
 
@@ -144,7 +144,8 @@ public class Parser {
 
             // Print out the optimized microcode.
             for (Command currentCommand : microCode) {
-                hdd.command(currentCommand.type, currentCommand.param);
+//                hdd.command(currentCommand.type, currentCommand.param);
+                System.out.println(currentCommand);
             }
         }
     }
@@ -163,6 +164,7 @@ public class Parser {
     private static class Command
     {
         CommandType type;
+        boolean hasParam = false;
         int param = 0;
         String sectorID = "00";
         public Command(CommandType type) {
@@ -173,6 +175,7 @@ public class Parser {
         }
         public Command(CommandType type, Integer param) {
             // For commands with param.
+            hasParam = true;
             this.type = type;
             this.param = param;
             this.sectorID = "" + currentTrack + currentSector;
@@ -181,7 +184,7 @@ public class Parser {
         public void setSectorID (String newSectorID) {
             this.sectorID = newSectorID;
         }
-        public String toString() { return type.toString() + " " + param; }
+        public String toString() { return type.toString() + (hasParam ? (" " + param) : ""); }
     }
 
     private static void spin() {
