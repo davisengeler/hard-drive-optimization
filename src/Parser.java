@@ -145,7 +145,7 @@ public class Parser {
             // Print out the optimized microcode.
             for (Command currentCommand : microCode) {
 //                hdd.command(currentCommand.type, currentCommand.param);
-                System.out.println(currentCommand);
+                System.out.println(currentCommand.toString().toUpperCase());
             }
         }
     }
