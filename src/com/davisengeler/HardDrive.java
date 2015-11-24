@@ -18,6 +18,11 @@ public class HardDrive {
         idle, arm, read, write, push, pop, system
     }
 
+    public void reset() {
+        currentTrack = 0;
+        currentSector = 0;
+    }
+
     public void command(CommandType command, int param) {
 //        System.out.println("\tHDD Recieved command '" + command.toString() + "' with parameter '" + param + "'.");
         switch (command) {

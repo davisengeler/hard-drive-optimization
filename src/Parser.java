@@ -19,13 +19,13 @@ public class Parser {
     public static void main(String[] args)
     {
         // Scan in the requests
-        ArrayList<ArrayList<String>> commandBlasts = new ArrayList<ArrayList<String>>();
+        ArrayList<ArrayList<String>> commandBlasts = new ArrayList<>();
         Scanner scan;
         try {
             scan = new Scanner(new File("test.txt"));
             while (scan.hasNextLine()) {
                 scan.nextLine(); // Get rid of equal sign separators
-                ArrayList<String> commands = new ArrayList<String>();
+                ArrayList<String> commands = new ArrayList<>();
                 commandBlasts.add(commands);
                 for (int i = 0; i < 32; i++) {
                     if (scan.hasNextLine())
@@ -37,17 +37,18 @@ public class Parser {
         }
 
         // Divide the micro code into sections for each 'blast.'
-        ArrayList<ArrayList<Command>> microCodeBlasts = new ArrayList<ArrayList<Command>>();
+        ArrayList<ArrayList<Command>> microCodeBlasts = new ArrayList<>();
         for ( ArrayList<String> commandStrings : commandBlasts)
         {
             // For each group of commands in each 'command blast.'
             // Make a new micro code blast.
-            System.out.println("\n====================\n");
-            ArrayList<Command> microCode = new ArrayList<Command>();
+            System.out.println("====================");
+            ArrayList<Command> microCode = new ArrayList<>();
             microCodeBlasts.add(microCode);
 
             // Some organization techniques to attempt optimizations
-            HashMap<String, ArrayList<Command>> readWrite = new HashMap<String, ArrayList<Command>>();
+            HashMap<Integer, ArrayList<Command>> sectorsReadWrite = new HashMap<>();
+            ArrayList<Command> readList = new ArrayList<>();
 
             for (String commandString : commandStrings)
             {
@@ -104,13 +105,14 @@ public class Parser {
                     int readTimes = Integer.parseInt(split[1]);
                     for (int i = 0; i < readTimes; i++) {
 //                        System.out.println("read track " + currentTrack + ", sector " + currentSector + ".");
-                        microCode.add(new Command(CommandType.read));
+                        Command readCommand = new Command(CommandType.read);
+                        microCode.add(readCommand);
 
                         // Store some information for optimization
-                        Command readCommand = new Command(CommandType.read);
-                        if (!readWrite.containsKey(readCommand.sectorID))
-                            readWrite.put(readCommand.sectorID, new ArrayList<Command>());
-                        readWrite.get(readCommand.sectorID).add(readCommand);
+                        readList.add(readCommand);
+                        if (!sectorsReadWrite.containsKey(readCommand.sectorID))
+                            sectorsReadWrite.put(readCommand.sectorID, new ArrayList<>());
+                        sectorsReadWrite.get(readCommand.sectorID).add(readCommand);
 
                         // Simulate a spin
                         spin();
@@ -122,13 +124,13 @@ public class Parser {
                     {
                         int value = Integer.parseInt(split[i]);
 //                        System.out.println("write value " + value + " to track " + currentTrack + ", sector " + currentSector);
-                        microCode.add(new Command(CommandType.write, value));
+                        Command writeCommand = new Command(CommandType.write, value);
+                        microCode.add(writeCommand);
 
                         // Store some information for optimization
-                        Command writeCommand = new Command(CommandType.write, value);
-                        if (!readWrite.containsKey(writeCommand.sectorID))
-                            readWrite.put(writeCommand.sectorID, new ArrayList<Command>());
-                        readWrite.get(writeCommand.sectorID).add(writeCommand);
+                        if (!sectorsReadWrite.containsKey(writeCommand.sectorID))
+                            sectorsReadWrite.put(writeCommand.sectorID, new ArrayList<>());
+                        sectorsReadWrite.get(writeCommand.sectorID).add(writeCommand);
 
                         // Simulate a spin
                         spin();
@@ -140,20 +142,59 @@ public class Parser {
 
             // At this point, 'microCode' holds all of the unoptimized commands for this blast.
             // So let's replace the content of 'microCode' with its optimized version.
-            microCode = optimize(microCode, readWrite);
+            microCode = optimize(microCode, sectorsReadWrite, readList);
 
             // Print out the optimized microcode.
             for (Command currentCommand : microCode) {
 //                hdd.command(currentCommand.type, currentCommand.param);
                 System.out.println(currentCommand.toString().toUpperCase());
             }
+
+            // Reset the simulated hard drive for the next set of user instructions.
+            hdd.reset();
+            currentSector = 0;
+            currentTrack = 0;
         }
     }
 
-    private static ArrayList<Command> optimize(ArrayList<Command> unoptimized, HashMap<String, ArrayList<Command>> readWriteRelationships) {
-        ArrayList<Command> optimized = new ArrayList<Command>();
-        HashMap<Integer, ArrayList<Integer>> systemRead = new HashMap<Integer, ArrayList<Integer>>();
-        HashMap<Integer, Integer> systemWrite = new HashMap<Integer, Integer>();
+    private static ArrayList<Command> optimize(ArrayList<Command> unoptimized,
+                                               HashMap<Integer, ArrayList<Command>> sectorsReadWrite,
+                                               ArrayList<Command> readList)
+    {
+        ArrayList<Command> optimized = new ArrayList<>();
+        HashMap<Integer, Command> writeList = new HashMap<>();
+
+        // Go through each sector's commands and figure out the minimum that needs to be done.
+        for (int currentKey : sectorsReadWrite.keySet())
+        {
+            ArrayList<Command> sectorCommands = sectorsReadWrite.get(currentKey);
+            Command lastWrite = null;  // This will hold the only write that needs to be done to this sector.
+            for (int i = 0; i < sectorCommands.size(); i++)
+            {
+                Command currentCommand = sectorCommands.get(i);
+                if (currentCommand.type == CommandType.write)
+                    lastWrite = currentCommand;  // This will end holding the last write to the sector.
+                else {
+                    // This must be a read since this only holds reads and writes.
+                    if (lastWrite != null) {
+                        // If we have come across a write prior to this read, we already know what the value will be
+                        // and can replace this it with a SYSTEM for the value of the last write to the sector.
+                        int currentCommandIndex = readList.indexOf(currentCommand);
+                        readList.set(currentCommandIndex, new Command(CommandType.system, lastWrite.param));
+                    }
+                }
+            }
+            // Add the final write for this sector to a list of everything that should be written.
+            if (lastWrite != null)
+                writeList.put(lastWrite.sectorID, lastWrite);
+        }
+
+        // Print out sample of the optimized readList
+        System.out.println("\nOptimized readList [" + readList.size() + "]:");
+        for (Command currentCommand : readList) {
+            System.out.println(currentCommand);
+        }
+        System.out.println("\n");
 
 
         // TODO: This is just returning the unoptimized code for now.
@@ -165,12 +206,13 @@ public class Parser {
     {
         CommandType type;
         boolean hasParam = false;
-        int param = 0;
-        String sectorID = "00";
+        int param = 0, track = 0, sector = 0, sectorID = 0;
         public Command(CommandType type) {
             // For non-param commands
             this.type = type;
-            this.sectorID = "" + currentTrack + currentSector;
+            this.sectorID = (currentTrack * 10) + currentSector;
+            this.track = currentTrack;
+            this.sector = currentSector;
 //            System.out.println(type.toString() + "()");
         }
         public Command(CommandType type, Integer param) {
@@ -178,11 +220,15 @@ public class Parser {
             hasParam = true;
             this.type = type;
             this.param = param;
-            this.sectorID = "" + currentTrack + currentSector;
+            this.sectorID = (currentTrack * 10) + currentSector;
+            this.track = currentTrack;
+            this.sector = currentSector;
 //            System.out.println(type.toString() + "(" + param + ")");
         }
-        public void setSectorID (String newSectorID) {
-            this.sectorID = newSectorID;
+        public void setTrackSector(int newTrack, int newSector) {
+            track = newTrack;
+            sector = newSector;
+            sectorID = (currentTrack * 10) + currentSector;
         }
         public String toString() { return type.toString() + (hasParam ? (" " + param) : ""); }
     }
