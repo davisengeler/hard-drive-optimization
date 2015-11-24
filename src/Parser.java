@@ -1,8 +1,7 @@
 import java.io.File;
 import java.io.FileNotFoundException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Scanner;
+import java.util.*;
+
 import com.davisengeler.HardDrive;
 import com.davisengeler.HardDrive.CommandType;
 
@@ -46,6 +45,11 @@ public class Parser {
             ArrayList<Command> microCode = new ArrayList<>();
             microCodeBlasts.add(microCode);
 
+            // Reset the simulated hard drive for the optimized pathfinding and for the next set of user instructions.
+            hdd.reset();
+            currentSector = 0;
+            currentTrack = 0;
+
             // Some organization techniques to attempt optimizations
             HashMap<Integer, ArrayList<Command>> sectorsReadWrite = new HashMap<>();
             ArrayList<Command> readList = new ArrayList<>();
@@ -65,17 +69,14 @@ public class Parser {
                     int parameter = Integer.parseInt(split[1]);
                     int desiredTrack = parameter / numTracks;
                     int desiredSector = parameter % numSectorsPerTrack;
-//                    System.out.println("Seek to track " + desiredTrack + ", sector " + desiredSector + ".");
 
                     // Set the correct ARM status
                     if (currentTrack < desiredTrack) {
                         microCode.add(new Command(CommandType.arm, 1));
-//                        System.out.println("arm 1");
                         armStatus = 1;
                         spin();
                     } else if (currentTrack > desiredTrack) {
                         microCode.add(new Command(CommandType.arm, -1));
-//                        System.out.println("arm -1");
                         armStatus = -1;
                         spin();
                     }
@@ -84,18 +85,14 @@ public class Parser {
                     boolean seeking = true;
                     while (seeking) {
                         if (currentTrack == desiredTrack && armStatus != 0) {
-//                            System.out.println("arm 0");
                             microCode.add(new Command(CommandType.arm, 0));
                             armStatus = 0;
                             spin();
                         }
-                        if (currentTrack == desiredTrack && currentSector == desiredSector){
+                        if (currentTrack == desiredTrack && currentSector == desiredSector)
                             seeking = false;
-//                            System.out.println("Currently over track " + currentTrack + ", sector " + currentSector + ".");
-                        }
                         else {
                             microCode.add(new Command(CommandType.idle));
-//                            System.out.println("idle");
                             spin();
                         }
                     }
@@ -104,7 +101,6 @@ public class Parser {
                     // READ
                     int readTimes = Integer.parseInt(split[1]);
                     for (int i = 0; i < readTimes; i++) {
-//                        System.out.println("read track " + currentTrack + ", sector " + currentSector + ".");
                         Command readCommand = new Command(CommandType.read);
                         microCode.add(readCommand);
 
@@ -123,7 +119,6 @@ public class Parser {
                     for (int i = 1; i < split.length; i++)
                     {
                         int value = Integer.parseInt(split[i]);
-//                        System.out.println("write value " + value + " to track " + currentTrack + ", sector " + currentSector);
                         Command writeCommand = new Command(CommandType.write, value);
                         microCode.add(writeCommand);
 
@@ -138,22 +133,14 @@ public class Parser {
                 }
                 else System.out.println("PROBLEM: Undefined user command '" + commandString + "'");
             }
-            System.out.println("");
 
             // At this point, 'microCode' holds all of the unoptimized commands for this blast.
             // So let's replace the content of 'microCode' with its optimized version.
             microCode = optimize(microCode, sectorsReadWrite, readList);
-
-            // Print out the optimized microcode.
             for (Command currentCommand : microCode) {
 //                hdd.command(currentCommand.type, currentCommand.param);
                 System.out.println(currentCommand.toString().toUpperCase());
             }
-
-            // Reset the simulated hard drive for the next set of user instructions.
-            hdd.reset();
-            currentSector = 0;
-            currentTrack = 0;
         }
     }
 
@@ -162,7 +149,13 @@ public class Parser {
                                                ArrayList<Command> readList)
     {
         ArrayList<Command> optimized = new ArrayList<>();
-        HashMap<Integer, Command> writeList = new HashMap<>();
+        HashMap<Integer, Command> writeList = new HashMap<>();          // HashMap to efficiently find write for particular sector
+        List<Command> writeOrder = new ArrayList<>();                   // 2D array list to attempt a sort
+
+        // Reset the simulated hard drive for the optimized pathfinding and for the next set of user instructions.
+        hdd.reset();
+        currentSector = 0;
+        currentTrack = 0;
 
         // Go through each sector's commands and figure out the minimum that needs to be done.
         for (int currentKey : sectorsReadWrite.keySet())
@@ -185,24 +178,124 @@ public class Parser {
                 }
             }
             // Add the final write for this sector to a list of everything that should be written.
-            if (lastWrite != null)
+            if (lastWrite != null) {
                 writeList.put(lastWrite.sectorID, lastWrite);
+                writeOrder.add(lastWrite);
+            }
         }
 
-        // Print out sample of the optimized readList
-        System.out.println("\nOptimized readList [" + readList.size() + "]:");
-        for (Command currentCommand : readList) {
-            System.out.println(currentCommand);
+        // TODO: Now build a path to all reads.
+        for (Command currentCommand : readList)
+        {
+            if (currentCommand.type == CommandType.system)
+                optimized.add(currentCommand);  // Leave SYSTEM commands alone.
+            else
+            {
+                // We need to get to the read point...
+                int desiredTrack = currentCommand.track;
+                int desiredSector = currentCommand.sector;
+
+                // TODO: refactor to remove redundant code
+                // Set the correct ARM status
+                if (currentTrack < desiredTrack) {
+                    optimized.add(new Command(CommandType.arm, 1));
+                    armStatus = 1;
+                    spin();
+                } else if (currentTrack > desiredTrack) {
+                    optimized.add(new Command(CommandType.arm, -1));
+                    armStatus = -1;
+                    spin();
+                }
+
+                // Add correct number of idles and add the proper WRITE any time we pass over a sector that needs a write.
+                // NOTICE: If writing to a sector, check that it is not overwriting any 'fresh' reads to come later.
+                boolean seeking = true;
+                while (seeking) {
+                    if (currentTrack == desiredTrack && armStatus != 0) {
+                        optimized.add(new Command(CommandType.arm, 0));
+                        armStatus = 0;
+                        spin();
+                    }
+                    if (currentTrack == desiredTrack && currentSector == desiredSector)
+                        seeking = false;
+                    else {
+                        int currentSectorID = (currentTrack * 10) + currentSector;
+                        boolean readyToWrite = false;
+                        if (writeList.containsKey(currentSectorID)) {
+                            // There is a write for this sector. Check to make sure it won't be overwriting a 'fresh' read later.
+                            readyToWrite = true;  // Not necessarily ready to write, but assume true until found otherwise.
+                            for (int i = 0; i < readList.size() && readyToWrite; i++) {
+                                if (currentSectorID == readList.get(i).sectorID)
+                                    readyToWrite = false;
+                            }
+                        }
+                        if (readyToWrite) {
+                            optimized.add(writeList.get(currentSectorID));  // Write something if we safely can.
+                            writeList.remove(currentSectorID);
+                        }
+                        else optimized.add(new Command(CommandType.idle));  // Otherwise, just stick in an idle.
+                        spin();
+                    }
+                }
+                optimized.add(currentCommand);
+            }
+            spin();
         }
-        System.out.println("\n");
 
+        while (!writeOrder.isEmpty())
+        {
+            // Use a greedy algorithm based on 'distance' (based on the Command compareTo method)
+            Collections.sort(writeOrder);
+            Command currentCommand = writeOrder.get(0);
+            writeOrder.remove(currentCommand);
 
-        // TODO: This is just returning the unoptimized code for now.
-        return unoptimized;
+            // We need to get to the correct sector to write to...
+            int desiredTrack = currentCommand.track;
+            int desiredSector = currentCommand.sector;
+
+            // TODO: refactor to remove redundant code
+            // Set the correct ARM status
+            if (currentTrack < desiredTrack) {
+                optimized.add(new Command(CommandType.arm, 1));
+                armStatus = 1;
+                spin();
+            } else if (currentTrack > desiredTrack) {
+                optimized.add(new Command(CommandType.arm, -1));
+                armStatus = -1;
+                spin();
+            }
+
+            // Add correct number of idles and add the proper WRITE any time we pass over a sector that needs a write.
+            boolean seeking = true;
+            while (seeking) {
+                if (currentTrack == desiredTrack && armStatus != 0) {
+                    optimized.add(new Command(CommandType.arm, 0));
+                    armStatus = 0;
+                    spin();
+                }
+                if (currentTrack == desiredTrack && currentSector == desiredSector)
+                    seeking = false;
+                else {
+                    int currentSectorID = (currentTrack * 10) + currentSector;
+                    if (writeList.containsKey(currentSectorID)) {
+                        optimized.add(writeList.get(currentSectorID));  // Write something if we safely can.
+                        writeOrder.remove(writeList.get(currentSectorID));
+                        writeList.remove(currentSectorID);
+                    }
+                    else
+                    optimized.add(new Command(CommandType.idle));  // Otherwise, just stick in an idle.
+                    spin();
+                }
+            }
+            optimized.add(currentCommand);
+            spin();
+        }
+
+        return optimized.size() < unoptimized.size() ? optimized : unoptimized;
     }
 
     // Command class to make things clean and readable.
-    private static class Command
+    private static class Command implements Comparable<Command>
     {
         CommandType type;
         boolean hasParam = false;
@@ -213,7 +306,6 @@ public class Parser {
             this.sectorID = (currentTrack * 10) + currentSector;
             this.track = currentTrack;
             this.sector = currentSector;
-//            System.out.println(type.toString() + "()");
         }
         public Command(CommandType type, Integer param) {
             // For commands with param.
@@ -223,12 +315,14 @@ public class Parser {
             this.sectorID = (currentTrack * 10) + currentSector;
             this.track = currentTrack;
             this.sector = currentSector;
-//            System.out.println(type.toString() + "(" + param + ")");
         }
-        public void setTrackSector(int newTrack, int newSector) {
-            track = newTrack;
-            sector = newSector;
-            sectorID = (currentTrack * 10) + currentSector;
+        public int compareTo(Command that) {
+            // Calculate some general 'distance' to implement a greedy algorithm for leftover writes.
+            int thisTrackDistance = Math.abs(currentTrack - this.track);
+            int thatTrackDistance = Math.abs(currentTrack - that.track);
+            int thisSectorDistance = Math.abs(((thisTrackDistance + currentSector) % numSectorsPerTrack) - this.sector);
+            int thatSectorDistance = Math.abs(((thatTrackDistance + currentSector) % numSectorsPerTrack) - that.sector);
+            return (thisSectorDistance + thisTrackDistance) - (thatSectorDistance + thatTrackDistance);
         }
         public String toString() { return type.toString() + (hasParam ? (" " + param) : ""); }
     }
@@ -239,6 +333,5 @@ public class Parser {
         currentTrack = (currentTrack + armStatus);
         if (currentTrack > numTracks) currentTrack = numTracks;
         else if (currentTrack < 0) currentTrack = 0;
-//        System.out.println("Head is currently on track " + currentTrack + " over sector " + currentSector);
     }
 }
