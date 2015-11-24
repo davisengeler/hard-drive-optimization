@@ -18,13 +18,13 @@ public class Parser {
     public static void main(String[] args)
     {
         // Scan in the requests
-        ArrayList<ArrayList<String>> commandBlasts = new ArrayList<>();
+        ArrayList<ArrayList<String>> commandBlasts = new ArrayList<ArrayList<String>>();
         Scanner scan;
         try {
             scan = new Scanner(new File("test.txt"));
             while (scan.hasNextLine()) {
                 scan.nextLine(); // Get rid of equal sign separators
-                ArrayList<String> commands = new ArrayList<>();
+                ArrayList<String> commands = new ArrayList<String>();
                 commandBlasts.add(commands);
                 for (int i = 0; i < 32; i++) {
                     if (scan.hasNextLine())
@@ -36,13 +36,13 @@ public class Parser {
         }
 
         // Divide the micro code into sections for each 'blast.'
-        ArrayList<ArrayList<Command>> microCodeBlasts = new ArrayList<>();
+        ArrayList<ArrayList<Command>> microCodeBlasts = new ArrayList<ArrayList<Command>>();
         for ( ArrayList<String> commandStrings : commandBlasts)
         {
             // For each group of commands in each 'command blast.'
             // Make a new micro code blast.
             System.out.println("====================");
-            ArrayList<Command> microCode = new ArrayList<>();
+            ArrayList<Command> microCode = new ArrayList<Command>();
             microCodeBlasts.add(microCode);
 
             // Reset the simulated hard drive for the optimized pathfinding and for the next set of user instructions.
@@ -51,8 +51,8 @@ public class Parser {
             currentTrack = 0;
 
             // Some organization techniques to attempt optimizations
-            HashMap<Integer, ArrayList<Command>> sectorsReadWrite = new HashMap<>();
-            ArrayList<Command> readList = new ArrayList<>();
+            HashMap<Integer, ArrayList<Command>> sectorsReadWrite = new HashMap<Integer, ArrayList<Command>>();
+            ArrayList<Command> readList = new ArrayList<Command>();
 
             for (String commandString : commandStrings)
             {
@@ -107,7 +107,7 @@ public class Parser {
                         // Store some information for optimization
                         readList.add(readCommand);
                         if (!sectorsReadWrite.containsKey(readCommand.sectorID))
-                            sectorsReadWrite.put(readCommand.sectorID, new ArrayList<>());
+                            sectorsReadWrite.put(readCommand.sectorID, new ArrayList<Command>());
                         sectorsReadWrite.get(readCommand.sectorID).add(readCommand);
 
                         // Simulate a spin
@@ -124,7 +124,7 @@ public class Parser {
 
                         // Store some information for optimization
                         if (!sectorsReadWrite.containsKey(writeCommand.sectorID))
-                            sectorsReadWrite.put(writeCommand.sectorID, new ArrayList<>());
+                            sectorsReadWrite.put(writeCommand.sectorID, new ArrayList<Command>());
                         sectorsReadWrite.get(writeCommand.sectorID).add(writeCommand);
 
                         // Simulate a spin
@@ -148,9 +148,9 @@ public class Parser {
                                                HashMap<Integer, ArrayList<Command>> sectorsReadWrite,
                                                ArrayList<Command> readList)
     {
-        ArrayList<Command> optimized = new ArrayList<>();
-        HashMap<Integer, Command> writeList = new HashMap<>();          // HashMap to efficiently find write for particular sector
-        List<Command> writeOrder = new ArrayList<>();                   // 2D array list to attempt a sort
+        ArrayList<Command> optimized = new ArrayList<Command>();
+        HashMap<Integer, Command> writeList = new HashMap<Integer, Command>();          // HashMap to efficiently find write for particular sector
+        List<Command> writeOrder = new ArrayList<Command>();                   // 2D array list to attempt a sort
 
         // Reset the simulated hard drive for the optimized pathfinding and for the next set of user instructions.
         hdd.reset();
