@@ -1,5 +1,6 @@
 import java.io.File;
 import java.io.FileNotFoundException;
+import java.lang.reflect.Array;
 import java.util.*;
 
 import com.davisengeler.HardDrive;
@@ -14,6 +15,7 @@ public class Parser {
     static int currentSector = 0;
     static int armStatus = 0;
     static HardDrive hdd = new HardDrive(numTracks, numSectorsPerTrack);
+    static Stack stack = new Stack(5);
 
     public static void main(String[] args)
     {
@@ -134,11 +136,18 @@ public class Parser {
                 else System.out.println("PROBLEM: Undefined user command '" + commandString + "'");
             }
 
-            // At this point, 'microCode' holds all of the unoptimized commands for this blast.
-            // So let's replace the content of 'microCode' with its optimized version.
+            // The unoptimized code has been generated. Uncomment the following lines to see the pure conversion.
+            System.out.println("Normal: " + microCode.size());
+//            for (Command currentCommand : microCode) {
+////                hdd.command(currentCommand.type, currentCommand.param);  // This is for use with my simulator. Not necessary.
+//                System.out.println(currentCommand.toString().toUpperCase());
+//            }
+
+            // Now we can replace the content of 'microCode' with its optimized version and print out the optimized commands.
             microCode = optimize(microCode, sectorsReadWrite, readList);
+            System.out.println("Optimized: " + microCode.size());
             for (Command currentCommand : microCode) {
-//                hdd.command(currentCommand.type, currentCommand.param);
+//                hdd.command(currentCommand.type, currentCommand.param);  // This is for use with my simulator. Not necessary.
                 System.out.println(currentCommand.toString().toUpperCase());
             }
         }
@@ -185,61 +194,101 @@ public class Parser {
         }
 
         // TODO: Now build a path to all reads.
-        for (Command currentCommand : readList)
+//        System.out.println ("\n\n========================\n\n");
+        for (int readNumber = 0; readNumber < readList.size(); readNumber++)
         {
-            if (currentCommand.type == CommandType.system)
-                optimized.add(currentCommand);  // Leave SYSTEM commands alone.
-            else
-            {
-                // We need to get to the read point...
-                int desiredTrack = currentCommand.track;
-                int desiredSector = currentCommand.sector;
+            // Go through each read in the list. (This list also contains SYSTEM commands.)
+            Command currentCommand = readList.get(readNumber);
+//            System.out.println("Found " + currentCommand);
+//            if (currentCommand.type == CommandType.read) {
+//                // We only want to generate seek paths for READ, not for SYSTEM.
+//                ArrayList<Command> seekPath = generateNavigation(currentCommand);
+//                System.out.println("\tWe need to traverse to the " + currentCommand);
+//                for (Command seekingCommand : seekPath) {
+//                    System.out.println("\t\tCame across a " + seekingCommand);
+//                    if (seekingCommand.type == CommandType.idle)
+//                    {
+//                        // See if we can replace this idle with a write.
+//                        int currentSectorID = seekingCommand.sectorID;
+//                        boolean readyToWrite = false;
+//                        if (writeList.containsKey(currentSectorID)) {
+//                            // There is a write for this sector. Check to make sure it won't be overwriting a 'fresh' read later.
+//                            readyToWrite = true;  // Not necessarily ready to write, but assume true until found otherwise.
+//                            for (int i = 0; i < readList.size() && readyToWrite; i++) {
+//                                if (readList.get(i) != null && currentSectorID == readList.get(i).sectorID)
+//                                    // TODO: Maybe use the stack here...
+//                                    readyToWrite = false;  // If we come across a fresh read that needs to happen later, we can't write to this sector.
+//                            }
+//                        }
+//                        if (readyToWrite) {
+//                            seekingCommand = writeList.get(currentSectorID);  // Write something if we safely can.
+//                            writeList.remove(currentSectorID);
+//                            System.out.println("\t\t>Replaced it with " + seekingCommand);
+//                        }
+//                    }
+//                    optimized.add(seekingCommand);
+//                }
+//            } else {
+//                optimized.add(currentCommand);
+//            }
 
-                // TODO: refactor to remove redundant code
-                // Set the correct ARM status
-                if (currentTrack < desiredTrack) {
-                    optimized.add(new Command(CommandType.arm, 1));
-                    armStatus = 1;
-                    spin();
-                } else if (currentTrack > desiredTrack) {
-                    optimized.add(new Command(CommandType.arm, -1));
-                    armStatus = -1;
-                    spin();
-                }
+            if (currentCommand != null) {
+                if (currentCommand.type == CommandType.system)
+                    optimized.add(currentCommand);  // Leave SYSTEM commands alone.
+                else {
+                    // We need to get to the read point...
+                    int desiredTrack = currentCommand.track;
+                    int desiredSector = currentCommand.sector;
 
-                // Add correct number of idles and add the proper WRITE any time we pass over a sector that needs a write.
-                // NOTICE: If writing to a sector, check that it is not overwriting any 'fresh' reads to come later.
-                boolean seeking = true;
-                while (seeking) {
-                    if (currentTrack == desiredTrack && armStatus != 0) {
-                        optimized.add(new Command(CommandType.arm, 0));
-                        armStatus = 0;
+                    // TODO: refactor to remove redundant code
+                    // Set the correct ARM status
+                    if (currentTrack < desiredTrack) {
+                        optimized.add(new Command(CommandType.arm, 1));
+                        armStatus = 1;
+                        spin();
+                    } else if (currentTrack > desiredTrack) {
+                        optimized.add(new Command(CommandType.arm, -1));
+                        armStatus = -1;
                         spin();
                     }
-                    if (currentTrack == desiredTrack && currentSector == desiredSector)
-                        seeking = false;
-                    else {
-                        int currentSectorID = (currentTrack * 10) + currentSector;
-                        boolean readyToWrite = false;
-                        if (writeList.containsKey(currentSectorID)) {
-                            // There is a write for this sector. Check to make sure it won't be overwriting a 'fresh' read later.
-                            readyToWrite = true;  // Not necessarily ready to write, but assume true until found otherwise.
-                            for (int i = 0; i < readList.size() && readyToWrite; i++) {
-                                if (currentSectorID == readList.get(i).sectorID)
-                                    readyToWrite = false;
+
+                    // Add correct number of idles and add the proper WRITE any time we pass over a sector that needs a write.
+                    // NOTICE: If writing to a sector, check that it is not overwriting any 'fresh' reads to come later.
+                    boolean seeking = true;
+                    while (seeking) {
+                        if (currentTrack == desiredTrack && currentSector == desiredSector)
+                            seeking = false;
+                        else {
+
+                            if (currentTrack == desiredTrack && armStatus != 0) {
+                                optimized.add(new Command(CommandType.arm, 0));
+                                armStatus = 0;
+                                spin();
+                            } else {
+                                int currentSectorID = (currentTrack * 10) + currentSector;
+                                boolean readyToWrite = false;
+                                if (writeList.containsKey(currentSectorID)) {
+                                    // There is a write for this sector. Check to make sure it won't be overwriting a 'fresh' read later.
+                                    readyToWrite = true;  // Not necessarily ready to write, but assume true until found otherwise.
+                                    for (int i = 0; i < readList.size() && readyToWrite; i++) {
+                                        if (readList.get(i) != null && currentSectorID == readList.get(i).sectorID)
+                                            readyToWrite = false;
+                                    }
+                                }
+                                if (readyToWrite) {
+//                                    System.out.println("Was able to sneak in a write");
+                                    optimized.add(writeList.get(currentSectorID));  // Write something if we safely can.
+                                    writeList.remove(currentSectorID);
+                                } else optimized.add(new Command(CommandType.idle));  // Otherwise, just stick in an idle.
+                                spin();
                             }
                         }
-                        if (readyToWrite) {
-                            optimized.add(writeList.get(currentSectorID));  // Write something if we safely can.
-                            writeList.remove(currentSectorID);
-                        }
-                        else optimized.add(new Command(CommandType.idle));  // Otherwise, just stick in an idle.
-                        spin();
                     }
+                    optimized.add(currentCommand);
+                    readList.set(readList.indexOf(currentCommand), null);  // Changing to null instead of removing to avoid ConcurrentModificationException
                 }
-                optimized.add(currentCommand);
+                spin();
             }
-            spin();
         }
 
         while (!writeOrder.isEmpty())
@@ -291,7 +340,50 @@ public class Parser {
             spin();
         }
 
-        return optimized.size() < unoptimized.size() ? optimized : unoptimized;
+//        return optimized.size() < unoptimized.size() ? optimized : unoptimized;
+        return optimized;
+    }
+
+    // Generates a group of commands to navigate to a given sector.
+    private static ArrayList<Command> generateNavigation(Command currentCommand)
+    {
+        ArrayList<Command> navigationResults = new ArrayList<Command>();
+
+        // We need to get to the correct sector to write to...
+        int desiredTrack = currentCommand.track;
+        int desiredSector = currentCommand.sector;
+
+        // TODO: refactor to remove redundant code
+        // Set the correct ARM status
+        if (currentTrack < desiredTrack) {
+            navigationResults.add(new Command(CommandType.arm, 1));
+            armStatus = 1;
+            spin();
+        } else if (currentTrack > desiredTrack) {
+            navigationResults.add(new Command(CommandType.arm, -1));
+            armStatus = -1;
+            spin();
+        }
+
+        // Add correct number of idles and add the proper WRITE any time we pass over a sector that needs a write.
+        boolean seeking = true;
+        while (seeking) {
+            if (currentTrack == desiredTrack && armStatus != 0) {
+                navigationResults.add(new Command(CommandType.arm, 0));
+                armStatus = 0;
+                spin();
+            }
+            if (currentTrack == desiredTrack && currentSector == desiredSector)
+                seeking = false;
+            else {
+                navigationResults.add(new Command(CommandType.idle));  // Otherwise, just stick in an idle.
+                spin();
+            }
+        }
+        navigationResults.add(currentCommand);
+        spin();
+
+        return navigationResults;
     }
 
     // Command class to make things clean and readable.
@@ -320,11 +412,35 @@ public class Parser {
             // Calculate some general 'distance' to implement a greedy algorithm for leftover writes.
             int thisTrackDistance = Math.abs(currentTrack - this.track);
             int thatTrackDistance = Math.abs(currentTrack - that.track);
-            int thisSectorDistance = Math.abs(((thisTrackDistance + currentSector) % numSectorsPerTrack) - this.sector);
-            int thatSectorDistance = Math.abs(((thatTrackDistance + currentSector) % numSectorsPerTrack) - that.sector);
+            int thisSectorDistance = (this.sector - currentSector + numSectorsPerTrack ) % numSectorsPerTrack;
+            int thatSectorDistance = (that.sector - currentSector + numSectorsPerTrack) % numSectorsPerTrack;
             return (thisSectorDistance + thisTrackDistance) - (thatSectorDistance + thatTrackDistance);
         }
         public String toString() { return type.toString() + (hasParam ? (" " + param) : ""); }
+    }
+
+    // Stack class
+    private static class Stack {
+        Command[] elements;
+        int last = 0;
+        int size;
+        public Stack(int size) {
+            this.size = size;
+            elements = new Command[size];
+        };
+        public void push(Command element) {
+            elements[last] = element;
+            last = (last + 1) % size;
+        }
+        public Command pop() {
+            last = (last - 1) % size;
+            Command element = elements[last];
+            elements[last] = null;
+            return element;
+        }
+        public Command peek() {
+            return elements[last];
+        }
     }
 
     private static void spin() {
