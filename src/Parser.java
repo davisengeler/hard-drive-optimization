@@ -1,10 +1,9 @@
 import java.io.File;
 import java.io.FileNotFoundException;
-import java.lang.reflect.Array;
 import java.util.*;
 
-import com.davisengeler.HardDrive;
-import com.davisengeler.HardDrive.CommandType;
+import com.davisengeler.HardDrive;  // For my simulator. Not necessary.
+import com.davisengeler.HardDrive.CommandType;  // This is just an ENUM. I could have made it in this class, but it was cleaner this way at first.
 
 public class Parser {
 
@@ -140,12 +139,11 @@ public class Parser {
             // The unoptimized code has been generated.
             // Uncomment the following lines to see the pure conversion.
 
-            for (Command currentCommand : microCode) {
-//                hdd.command(currentCommand.type, currentCommand.param);  // This is for use with my simulator. Not necessary.
-                System.out.println(currentCommand.toString().toUpperCase());
-            }
-
-            System.out.println("\nOptimized: \n");
+//            for (Command currentCommand : microCode) {
+////                hdd.command(currentCommand.type, currentCommand.param);  // This is for use with my simulator. Not necessary.
+//                System.out.println(currentCommand.toString().toUpperCase());
+//            }
+//            System.out.println("\nOptimized: \n");
 
             // Now we can replace the content of 'microCode' with its optimized version and print out the optimized commands.
             microCode = optimize(microCode, sectorsReadWrite, readList);
